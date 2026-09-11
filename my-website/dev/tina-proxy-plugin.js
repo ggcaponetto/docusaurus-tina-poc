@@ -50,10 +50,32 @@ function isTinaRequest(pathname, req) {
   );
 }
 
+const ORIGIN_FIX_ID = 'tina-same-origin-api';
+
+// Runs between Vite's client (which defines __API_URL__ on globalThis) and
+// main.tsx (which reads it when the app renders), so it wins without racing.
+const ORIGIN_FIX = `
+  <script type="module" id="${ORIGIN_FIX_ID}">
+    // The admin answers at more than one origin: the Codespaces forwarded
+    // hostname, or plain localhost when VS Code forwards the port. Vite bakes
+    // the content API URL in at server start, and reaching the forwarded
+    // hostname cross-origin fails - it answers 401 with no CORS headers, since
+    // Tina's fetch sends no credentials - which surfaces as "Failed to fetch".
+    // Every endpoint is proxied same-origin anyway, so point the content API at
+    // whichever origin this page was actually loaded from.
+    if (globalThis.__API_URL__) {
+      const url = new URL(globalThis.__API_URL__, location.href);
+      url.protocol = location.protocol;
+      url.host = location.host;
+      globalThis.__API_URL__ = url.toString();
+    }
+  </script>`;
+
 /**
  * Rewrites the `http://localhost:4001` asset URLs that @tinacms/cli bakes into
  * the generated admin entry point into same-origin paths, so the page works
- * from a browser that has no route to the codespace's localhost.
+ * from a browser that has no route to the codespace's localhost, and pins the
+ * content API to the origin the page was served from.
  */
 function patchAdminHtml(htmlPath) {
   let html;
@@ -62,7 +84,13 @@ function patchAdminHtml(htmlPath) {
   } catch {
     return false;
   }
-  const patched = html.replaceAll(`http://localhost:${TINA_PORT}`, '');
+  let patched = html.replaceAll(`http://localhost:${TINA_PORT}`, '');
+  if (!patched.includes(ORIGIN_FIX_ID)) {
+    patched = patched.replace(
+      /(<script type="module" src="[^"]*@vite\/client"><\/script>)/,
+      `$1${ORIGIN_FIX}`,
+    );
+  }
   if (patched === html) {
     return false;
   }

@@ -141,6 +141,17 @@ function startPublishServer(siteDir) {
     }
   });
 
+  // An unhandled 'error' here would take the Docusaurus dev server down with
+  // it, so a busy port only costs the Publish button, not the whole session.
+  server.on('error', (err) => {
+    const detail =
+      err.code === 'EADDRINUSE'
+        ? `port ${PUBLISH_PORT} is in use — set TINA_PUBLISH_PORT to a free one`
+        : err.message;
+    // eslint-disable-next-line no-console
+    console.warn(`[tina-proxy] Publish endpoint disabled: ${detail}`);
+  });
+
   server.listen(PUBLISH_PORT, '127.0.0.1');
   server.unref();
   return server;
