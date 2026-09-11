@@ -1,0 +1,66 @@
+# Website
+
+This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+
+## Installation
+
+```bash
+npm install
+```
+
+**Note**: feel free to use the package manager of your choice.
+
+## Local Development
+
+```bash
+npm run start
+```
+
+This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+
+## Build
+
+```bash
+npm run build
+```
+
+This command generates static content into the `build` directory and can be served using any static contents hosting service.
+
+## Deployment
+
+Using SSH:
+
+```bash
+USE_SSH=true npm run deploy
+```
+
+Not using SSH:
+
+```bash
+GIT_USER=<Your GitHub username> npm run deploy
+```
+
+If you are using GitHub Pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+
+## TinaCMS in a Codespace
+
+```bash
+yarn tina
+```
+
+Open the URL that `[tina-proxy]` prints, e.g.
+`https://<codespace>-3000.app.github.dev/admin/index.html`.
+
+Nothing about that hostname is hardcoded — GitHub generates it per codespace, so
+`dev/urls.js` derives it from `CODESPACE_NAME` and
+`GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` at startup and falls back to
+`http://localhost:3000` outside a codespace.
+
+**No port needs to be public.** The Tina GraphQL server stays bound to
+`localhost:4001`; the Docusaurus dev server proxies `/graphql`, `/media`,
+`/searchIndex` and Vite's admin module graph through to it
+(`dev/tina-proxy-plugin.js`). The browser only ever talks to port 3000, which
+stays *private* and behind GitHub's own Codespaces port authentication — so the
+backend is reachable by you and nobody else, with no shared secret to leak or
+rotate. Leave port 4001 private; making it public would expose an unauthenticated
+read/write content API.

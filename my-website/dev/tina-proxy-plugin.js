@@ -1,0 +1,142 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const {TINA_PORT, siteOrigin} = require('./urls');
+
+// `localhost`, not a literal IP: Tina's Vite server binds whichever loopback
+// family Node resolves first, which is `::1` here.
+const TINA_TARGET = `http://localhost:${TINA_PORT}`;
+
+// Endpoints the Tina dev server owns (see the `devServerEndPointsPlugin`
+// middleware in @tinacms/cli).
+const API_PREFIXES = [
+  '/graphql',
+  '/media',
+  '/searchIndex',
+  '/v2/searchIndex',
+  '/altair',
+];
+
+/**
+ * True for requests that must reach the Tina dev server rather than Docusaurus.
+ */
+function isTinaRequest(pathname, req) {
+  if (
+    API_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    )
+  ) {
+    return true;
+  }
+  if (!pathname.startsWith('/admin')) {
+    return false;
+  }
+  // Vite serves the admin SPA under the base path `/admin/`, and its HMR
+  // socket connects to that same path.
+  if (req.headers.upgrade === 'websocket') {
+    return true;
+  }
+  // `/admin/` and `/admin/index.html` are the static entry point Docusaurus
+  // serves out of `static/`. The admin uses hash routing, so every other path
+  // under `/admin/` is part of Vite's module graph.
+  return (
+    pathname !== '/admin' &&
+    pathname !== '/admin/' &&
+    pathname !== '/admin/index.html'
+  );
+}
+
+/**
+ * Rewrites the `http://localhost:4001` asset URLs that @tinacms/cli bakes into
+ * the generated admin entry point into same-origin paths, so the page works
+ * from a browser that has no route to the codespace's localhost.
+ */
+function patchAdminHtml(htmlPath) {
+  let html;
+  try {
+    html = fs.readFileSync(htmlPath, 'utf8');
+  } catch {
+    return false;
+  }
+  const patched = html.replaceAll(`http://localhost:${TINA_PORT}`, '');
+  if (patched === html) {
+    return false;
+  }
+  fs.writeFileSync(htmlPath, patched);
+  return true;
+}
+
+/**
+ * Keeps the admin entry point patched. @tinacms/cli rewrites the file on every
+ * restart of its dev server, so a one-shot patch is not enough.
+ */
+function watchAdminHtml(siteDir, log) {
+  const adminDir = path.join(siteDir, 'static', 'admin');
+  const htmlPath = path.join(adminDir, 'index.html');
+
+  let announced = false;
+  const patch = () => {
+    if (patchAdminHtml(htmlPath) && !announced) {
+      announced = true;
+      log(`Tina admin: ${siteOrigin()}/admin/index.html`);
+    }
+  };
+
+  const start = () => {
+    if (!fs.existsSync(adminDir)) {
+      setTimeout(start, 500).unref();
+      return;
+    }
+    patch();
+    let pending = null;
+    fs.watch(adminDir, (_event, filename) => {
+      if (filename && filename !== 'index.html') {
+        return;
+      }
+      clearTimeout(pending);
+      pending = setTimeout(patch, 50);
+      pending.unref();
+    }).unref();
+  };
+  start();
+}
+
+/**
+ * Serves the Tina dev backend through the Docusaurus dev server so that the
+ * admin, the GraphQL API and the media endpoints all share one origin.
+ *
+ * That keeps the Tina server on localhost:4001 — unforwarded and unreachable
+ * from outside the codespace — while the single port the browser does talk to
+ * (3000) stays behind GitHub's own Codespaces port authentication.
+ */
+module.exports = function tinaProxyPlugin(context) {
+  const isDev = process.env.NODE_ENV !== 'production';
+
+  if (isDev) {
+    watchAdminHtml(context.siteDir, (message) =>
+      // eslint-disable-next-line no-console
+      console.log(`[tina-proxy] ${message}`),
+    );
+  }
+
+  return {
+    name: 'tina-proxy',
+    configureWebpack(_config, isServer) {
+      if (isServer || !isDev) {
+        return {};
+      }
+      return {
+        devServer: {
+          proxy: [
+            {
+              context: isTinaRequest,
+              target: TINA_TARGET,
+              ws: true,
+              changeOrigin: true,
+              logLevel: 'warn',
+            },
+          ],
+        },
+      };
+    },
+  };
+};
