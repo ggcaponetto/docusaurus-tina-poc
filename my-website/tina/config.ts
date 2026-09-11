@@ -1,5 +1,5 @@
 import { defineConfig } from "tinacms";
-import { contentApiUrl, siteOrigin } from "../dev/urls";
+import { IS_CODESPACE, contentApiUrl, siteOrigin } from "../dev/urls";
 import { publishScreenPlugin } from "./publish-screen";
 
 // Your hosting provider likely exposes this as an environment variable
@@ -14,10 +14,17 @@ const isDevProxy = process.env.TINA_DEV_PROXY === "1";
 
 export default defineConfig({
   branch,
-  // Only set while `yarn tina` is running: the admin then talks to the
-  // Docusaurus dev server's own origin, which proxies through to the Tina
-  // server on localhost:4001. A production build must keep this unset.
-  contentApiUrlOverride: isDevProxy ? contentApiUrl() : undefined,
+  // Only in a Codespace, and only while `yarn tina` is running. There each
+  // port gets its own hostname, and reaching Tina's own hostname from the site
+  // is cross-origin against a private forwarded port, so the admin has to go
+  // through the Docusaurus dev server's proxy instead.
+  //
+  // On a normal machine every port shares `localhost` and Tina's default URL
+  // already works, so leaving this unset keeps BOTH entry points usable:
+  // localhost:4001/admin/ natively, and localhost:3000/admin/index.html via
+  // the proxy. A production build must keep it unset too.
+  contentApiUrlOverride:
+    isDevProxy && IS_CODESPACE ? contentApiUrl() : undefined,
   // Get this from tina.io
   clientId: process.env.NEXT_PUBLIC_TINA_CLIENT_ID,
   // Get this from tina.io
@@ -38,7 +45,7 @@ export default defineConfig({
   // Writes arrive proxied from the Docusaurus dev server, so they carry that
   // origin rather than localhost; without this Tina rejects them with 403.
   server: {
-    allowedOrigins: isDevProxy ? [siteOrigin()] : [],
+    allowedOrigins: isDevProxy && IS_CODESPACE ? [siteOrigin()] : [],
   },
   media: {
     tina: {

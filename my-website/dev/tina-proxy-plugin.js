@@ -1,6 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const {TINA_PORT, siteOrigin} = require('./urls');
+const {IS_CODESPACE, TINA_PORT, siteOrigin} = require('./urls');
 const {
   PUBLISH_PATH,
   PUBLISH_PORT,
@@ -144,10 +144,9 @@ module.exports = function tinaProxyPlugin(context) {
     startPublishServer(context.siteDir);
   }
 
-  // Tina's own banner prints `<your-dev-server-url>/admin/index.html` and the
-  // editor offers to open port 4001, which serves the same app but reads its
-  // content from a different origin and so comes up empty. Announce the real
-  // URL once, after the compile output, where it is the last thing on screen.
+  // Tina's own banner prints an unresolved `<your-dev-server-url>`, so announce
+  // the real URL once, after the compile output, where it is the last thing on
+  // screen.
   let announced = false;
   const announcePlugin = {
     apply(compiler) {
@@ -156,11 +155,17 @@ module.exports = function tinaProxyPlugin(context) {
           return;
         }
         announced = true;
-        // eslint-disable-next-line no-console
-        console.log(
-          `\n[tina-proxy] Edit content at ${siteOrigin()}/admin/index.html` +
-            `\n[tina-proxy] Not port ${TINA_PORT} — everything is proxied through this one.\n`,
+        const lines = [`Edit content at ${siteOrigin()}/admin/index.html`];
+        lines.push(
+          IS_CODESPACE
+            ? // Port 4001 serves Vite's stock index.html, which never gets the
+              // same-origin patch, and its forwarded hostname is a separate
+              // private origin — so there the admin loads but stays empty.
+              `Not port ${TINA_PORT}: in a Codespace that is a separate host, and the admin comes up empty there.`
+            : `Tina's own http://localhost:${TINA_PORT}/admin/ works too — same content, same files.`,
         );
+        // eslint-disable-next-line no-console
+        console.log(`\n${lines.map((l) => `[tina-proxy] ${l}`).join('\n')}\n`);
       });
     },
   };
