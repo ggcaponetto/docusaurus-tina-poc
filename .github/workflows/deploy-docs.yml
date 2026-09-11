@@ -34,14 +34,10 @@ jobs:
 
       - run: npm ci
 
-      # `enablement` turns Pages on the first time this runs, so the repo needs
-      # no manual setup.
-      - name: Configure Pages
-        if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
+      # No `actions/configure-pages` step: its only job is to hand a framework
+      # the baseUrl, and docusaurus.config.ts already hardcodes it. Skipping it
+      # keeps the build green when Pages has not been enabled yet — only the
+      # deploy job needs it.
       - run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
