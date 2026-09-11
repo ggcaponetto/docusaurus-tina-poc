@@ -48,8 +48,15 @@ If you are using GitHub Pages for hosting, this command is a convenient way to b
 yarn tina
 ```
 
-Open the URL that `[tina-proxy]` prints, e.g.
+Open the URL that `[tina-proxy]` prints when the compile finishes, e.g.
 `https://<codespace>-3000.app.github.dev/admin/index.html`.
+
+**Use port 3000, not 4001.** Tina's own banner says `<your-dev-server-url>`,
+and the editor will offer to open the port Tina listens on — but 4001 serves
+Vite's stock `index.html` out of `node_modules/@tinacms/app/`, which never gets
+the patch that points the content API at the page's own origin. The admin loads
+there and then shows no collections. Everything is proxied through 3000; 4001
+does not need to be forwarded at all.
 
 Nothing about that hostname is hardcoded — GitHub generates it per codespace, so
 `dev/urls.js` derives it from `CODESPACE_NAME` and

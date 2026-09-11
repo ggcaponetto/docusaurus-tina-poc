@@ -102,17 +102,11 @@ function patchAdminHtml(htmlPath) {
  * Keeps the admin entry point patched. @tinacms/cli rewrites the file on every
  * restart of its dev server, so a one-shot patch is not enough.
  */
-function watchAdminHtml(siteDir, log) {
+function watchAdminHtml(siteDir) {
   const adminDir = path.join(siteDir, 'static', 'admin');
   const htmlPath = path.join(adminDir, 'index.html');
 
-  let announced = false;
-  const patch = () => {
-    if (patchAdminHtml(htmlPath) && !announced) {
-      announced = true;
-      log(`Tina admin: ${siteOrigin()}/admin/index.html`);
-    }
-  };
+  const patch = () => patchAdminHtml(htmlPath);
 
   const start = () => {
     if (!fs.existsSync(adminDir)) {
@@ -145,13 +139,31 @@ module.exports = function tinaProxyPlugin(context) {
   const isDev = process.env.NODE_ENV !== 'production';
 
   if (isDev) {
-    watchAdminHtml(context.siteDir, (message) =>
-      // eslint-disable-next-line no-console
-      console.log(`[tina-proxy] ${message}`),
-    );
+    watchAdminHtml(context.siteDir);
     // Dev only: this endpoint runs git and gh on the developer's behalf.
     startPublishServer(context.siteDir);
   }
+
+  // Tina's own banner prints `<your-dev-server-url>/admin/index.html` and the
+  // editor offers to open port 4001, which serves the same app but reads its
+  // content from a different origin and so comes up empty. Announce the real
+  // URL once, after the compile output, where it is the last thing on screen.
+  let announced = false;
+  const announcePlugin = {
+    apply(compiler) {
+      compiler.hooks.done.tap('tina-proxy', () => {
+        if (announced) {
+          return;
+        }
+        announced = true;
+        // eslint-disable-next-line no-console
+        console.log(
+          `\n[tina-proxy] Edit content at ${siteOrigin()}/admin/index.html` +
+            `\n[tina-proxy] Not port ${TINA_PORT} — everything is proxied through this one.\n`,
+        );
+      });
+    },
+  };
 
   return {
     name: 'tina-proxy',
@@ -160,6 +172,7 @@ module.exports = function tinaProxyPlugin(context) {
         return {};
       }
       return {
+        plugins: [announcePlugin],
         devServer: {
           proxy: [
             {
