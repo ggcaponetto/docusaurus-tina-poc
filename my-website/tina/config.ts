@@ -1,5 +1,6 @@
 import { defineConfig } from "tinacms";
 import { contentApiUrl, siteOrigin } from "../dev/urls";
+import { publishScreenPlugin } from "./publish-screen";
 
 // Your hosting provider likely exposes this as an environment variable
 const branch =
@@ -25,6 +26,14 @@ export default defineConfig({
   build: {
     outputFolder: "admin",
     publicFolder: "static",
+  },
+  // Adds the "Publish" screen to the admin sidebar. It calls a dev-only
+  // endpoint, so it is registered only while `yarn tina` is running.
+  cmsCallback: (cms) => {
+    if (isDevProxy) {
+      cms.plugins.add(publishScreenPlugin);
+    }
+    return cms;
   },
   // Writes arrive proxied from the Docusaurus dev server, so they carry that
   // origin rather than localhost; without this Tina rejects them with 403.

@@ -64,3 +64,30 @@ stays *private* and behind GitHub's own Codespaces port authentication — so th
 backend is reachable by you and nobody else, with no shared secret to leak or
 rotate. Leave port 4001 private; making it public would expose an unauthenticated
 read/write content API.
+
+## Publishing an edit
+
+1. `yarn tina`, open the admin, edit a page and save. Tina writes straight to
+   the `.mdx` file on disk.
+2. Open **Publish** in the admin sidebar, give the change a title, and hit
+   Publish.
+
+That commits everything changed under `docs/`, `blog/` and `static/` to a fresh
+`tina/…` branch, pushes it, and opens a pull request with `gh`. Unrelated
+working-tree changes are left alone. Afterwards the checkout returns to the
+branch you started from, so the local preview shows what is actually published —
+your edit lives in the PR until it is merged.
+
+The endpoint behind that button (`dev/publish-server.js`) runs `git` and `gh`
+with the codespace's credentials. It is bound to loopback, is only reachable
+through the dev server's proxy, and is never started for a production build.
+
+## Deploying
+
+`.github/workflows/deploy-docs.yml` builds the site and deploys it to GitHub
+Pages on every push to `main`; pull requests only build, so a bad edit fails
+before it is merged. The first run enables Pages itself.
+
+The site is published at `https://ggcaponetto.github.io/docusaurus-tina-poc/`,
+so `baseUrl` is `/docusaurus-tina-poc/` for production builds and `/` in dev —
+the dev server and the Tina admin proxied through it are simplest at the root.

@@ -1,6 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {TINA_PORT, siteOrigin} = require('./urls');
+const {
+  PUBLISH_PATH,
+  PUBLISH_PORT,
+  startPublishServer,
+} = require('./publish-server');
 
 // `localhost`, not a literal IP: Tina's Vite server binds whichever loopback
 // family Node resolves first, which is `::1` here.
@@ -116,6 +121,8 @@ module.exports = function tinaProxyPlugin(context) {
       // eslint-disable-next-line no-console
       console.log(`[tina-proxy] ${message}`),
     );
+    // Dev only: this endpoint runs git and gh on the developer's behalf.
+    startPublishServer(context.siteDir);
   }
 
   return {
@@ -132,6 +139,11 @@ module.exports = function tinaProxyPlugin(context) {
               target: TINA_TARGET,
               ws: true,
               changeOrigin: true,
+              logLevel: 'warn',
+            },
+            {
+              context: (pathname) => pathname.startsWith(PUBLISH_PATH),
+              target: `http://127.0.0.1:${PUBLISH_PORT}`,
               logLevel: 'warn',
             },
           ],
